@@ -7,7 +7,7 @@ function renderBuildCounts(container, data) {
 	var gridChartOffset = 3; // space between start of grid and first bar
 	var maxBarWidth = 420; // width of the bar with the max value
 
-	// accessor functions 
+	// accessor functions
 	var barValue = function(d) { return d.value; };
 
 	// scales
@@ -23,7 +23,7 @@ function renderBuildCounts(container, data) {
 
 	// grid line labels
 	var gridContainer = chart.append('g')
-		.attr('transform', 'translate(' + barLabelWidth + ',' + gridLabelHeight + ')'); 
+		.attr('transform', 'translate(' + barLabelWidth + ',' + gridLabelHeight + ')');
 	gridContainer.selectAll("text").data(x.ticks(10)).enter().append("text")
 		.attr("x", x)
 		.attr("dy", -3)
@@ -40,7 +40,7 @@ function renderBuildCounts(container, data) {
 
 	// bar labels
 	var labelsContainer = chart.append('g')
-		.attr('transform', 'translate(' + (barLabelWidth - barLabelPadding) + ',' + (gridLabelHeight + gridChartOffset) + ')'); 
+		.attr('transform', 'translate(' + (barLabelWidth - barLabelPadding) + ',' + (gridLabelHeight + gridChartOffset) + ')');
 		labelsContainer.selectAll('text').data(data).enter().append('text')
 		.attr('y', yText)
 		.attr("dy", ".35em") // vertical-align: middle
@@ -49,7 +49,7 @@ function renderBuildCounts(container, data) {
 
 	// bars
 	var barsContainer = chart.append('g')
-		.attr('transform', 'translate(' + barLabelWidth + ',' + (gridLabelHeight + gridChartOffset) + ')'); 
+		.attr('transform', 'translate(' + barLabelWidth + ',' + (gridLabelHeight + gridChartOffset) + ')');
 	barsContainer.selectAll("rect").data(data).enter().append("rect")
 		.attr('y', y)
 		.attr('height', yScale.rangeBand())
@@ -101,7 +101,7 @@ function renderBuildTimes(container, barValue, data, baseUrl) {
 
 	// grid line labels
 	var gridContainer = chart.append('g')
-		.attr('transform', 'translate(' + paddingLeft + ',' + gridLabelHeight + ')'); 
+		.attr('transform', 'translate(' + paddingLeft + ',' + gridLabelHeight + ')');
 	gridContainer.selectAll("text").data(x.ticks(10)).enter().append("text")
 		.attr("x", x)
 		.attr("dy", -3)
@@ -118,7 +118,7 @@ function renderBuildTimes(container, barValue, data, baseUrl) {
 
 	// bars
 	var barsContainer = chart.append('g')
-		.attr('transform', 'translate(' + paddingLeft + ',' + (gridLabelHeight + gridChartOffset) + ')'); 
+		.attr('transform', 'translate(' + paddingLeft + ',' + (gridLabelHeight + gridChartOffset) + ')');
 	barsContainer.selectAll("rect").data(data).enter().append("rect")
 		.attr('y', y)
 		.attr('height', yScale.rangeBand())
@@ -138,16 +138,41 @@ function getBuildDate(build) {
 	return dt.toDateString();
 }
 
-function updateChart() {
-	var repoName = document.getElementById('repo-name').value;
+function handleRepoList() {
+    var data = JSON.parse(this.responseText);
+    console.log(data);
+    var repos = [];
+    if (data.message){
+        if (data.message.match(/Not Found/)){
+            alert("Invalid user. Please try with a valid GitHub username.");
+        }
+        else if (data.message.match(/API rate limit/i)){
+            alert("Rate Limit Exceeded. Try a token, or wait awhile.");
+        }
+        // TODO, handle 'Bad credentials' more gracefully
+    }
+    else{
+        data.forEach(doGraphThings);
+    }
+}
 
-	// need at least "a/a"
-	if (repoName.length < 3) {
-		return;
-	}
+function makeLabeledDivs(place, label){
+    var where = document.getElementById(place);
+    var box = document.createElement("div");
+    box.appendChild(document.createElement("h2").appendChild(document.createTextNode(label)));
+    var localdiv = document.createElement('div');
+    localdiv.id = place + "-" + label;
+    box.appendChild(localdiv);
+    where.appendChild(box);
+}
+
+function doGraphThings(repoObj){
+	var repoName = repoObj.owner.login + "/" + repoObj.name;
+    makeLabeledDivs("build-times-duration", repoObj.name);
+    makeLabeledDivs("build-times", repoObj.name);
+    makeLabeledDivs("build-counts", repoObj.name);
 
 	var baseUrl = 'https://travis-ci.org/' + repoName + '/builds/';
-
 	var buildsUrl = 'https://api.travis-ci.org/repos/' + repoName + '/builds?event_type=push';
 
 	var builds = [];
@@ -200,9 +225,9 @@ function updateChart() {
 			return (finished_at - started_at) / 60000;
 		}
 
-		renderBuildTimes('#build-times-duration', getDuration, builds, baseUrl);
-		renderBuildTimes('#build-times', getClockTime, builds, baseUrl);
-		renderBuildCounts('#build-counts', d3.entries(buildCounts), baseUrl);
+		renderBuildTimes('#build-times-duration-'+repoObj.name, getDuration, builds, baseUrl);
+		renderBuildTimes('#build-times-'+repoObj.name, getClockTime, builds, baseUrl);
+		renderBuildCounts('#build-counts-'+repoObj.name, d3.entries(buildCounts), baseUrl);
 
 		if (++i < n && curOldestBuild < oldestBuild) {
 			oldestBuild = curOldestBuild;
@@ -211,14 +236,28 @@ function updateChart() {
 	}
 
 	d3.json(buildsUrl, filterBuilds);
+
+}
+
+function updateChart() {
+    var userName = document.getElementById('user-name').value;
+    var token = document.getElementById('ghtoken').value;
+    var oReq = new XMLHttpRequest();
+    oReq.onload = handleRepoList;
+    var url = "https://api.github.com/users/" + userName + "/repos";
+    oReq.open("get", url, true);
+    if(token.length > 0) {
+        oReq.setRequestHeader("Authorization", "token " + token);
+    }
+    oReq.send();
 }
 
 function updateInputViaHash() {
-	document.getElementById('repo-name').value = window.location.hash.substr(1);
+	document.getElementById('user-name').value = window.location.hash.substr(1);
 }
 
 function updateHashViaInput() {
-	window.location.hash = '#' + document.getElementById('repo-name').value;
+	window.location.hash = '#' + document.getElementById('user-name').value;
 }
 
 d3.select(window).on('hashchange', updateInputViaHash);
