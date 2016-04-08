@@ -138,6 +138,29 @@ function getBuildDate(build) {
 	return dt.toDateString();
 }
 
+
+// from https://gist.github.com/niallo/3109252#gistcomment-1474669
+function parse_link_header(header) {
+    if (header.length === 0) {
+        throw new Error("input must not be of zero length");
+    }
+
+    // Split parts by comma
+    var parts = header.split(',');
+    var links = {};
+    // Parse each part into a named link
+    for(var i=0; i<parts.length; i++) {
+        var section = parts[i].split(';');
+        if (section.length == 2) {
+            var url = section[0].replace(/<(.*)>/, '$1').trim();
+            var name = section[1].replace(/rel="(.*)"/, '$1').trim();
+            links[name] = url;
+        }
+    }
+    //links.next is a string. Eww.
+    return links.next.split("\n")[2].split(" ")[1];
+}
+
 function handleRepoList() {
     var data = JSON.parse(this.responseText);
     console.log(data);
@@ -154,6 +177,17 @@ function handleRepoList() {
     else{
         data.forEach(doGraphThings);
     }
+    var url = parse_link_header(this.getAllResponseHeaders())
+
+    //TODO: Bail out if there was no 'next' URL
+    var token = document.getElementById('ghtoken').value;
+    var oReq = new XMLHttpRequest();
+    oReq.onload = handleRepoList;
+    oReq.open("get", url, true);
+    if(token.length > 0) {
+        oReq.setRequestHeader("Authorization", "token " + token);
+    }
+    oReq.send();
 }
 
 function makeLabeledDivs(place, label){
@@ -244,7 +278,7 @@ function updateChart() {
     var token = document.getElementById('ghtoken').value;
     var oReq = new XMLHttpRequest();
     oReq.onload = handleRepoList;
-    var url = "https://api.github.com/users/" + userName + "/repos";
+    var url = "https://api.github.com/users/" + userName + "/repos?per_page=50";
     oReq.open("get", url, true);
     if(token.length > 0) {
         oReq.setRequestHeader("Authorization", "token " + token);
